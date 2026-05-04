@@ -1,4 +1,12 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const sdm = require('node-sdm');
+
 export default function handler(req, res) {
-  const key = process.env.NTAG_KEY || '';
-  res.status(200).json({ keyLength: key.length, firstSix: key.substring(0,6), lastSix: key.slice(-6) });
+  res.status(200).json({
+    type: typeof sdm,
+    keys: Object.keys(sdm),
+    hasDefault: typeof sdm.default,
+    sampleDefault: typeof sdm.default,
+  });
 }
