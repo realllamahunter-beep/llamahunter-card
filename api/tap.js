@@ -1,29 +1,33 @@
-import verifySDM from 'node-sdm';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const verifySDM = require('node-sdm');
 
-const key = process.env.NTAG_KEY;
+const key = (process.env.NTAG_KEY || '').trim(); // remove invisible chars
 
 export default async function handler(req, res) {
-  const { picc_data, cmac } = req.query;
+  // Because of trial watermark, there are duplicate parameters.
+  // We need the LAST instance (the real dynamic data).
+  const rawParams = new URLSearchParams(req.url.split('?')[1] || '');
+  const allPiccData = rawParams.getAll('picc_data');
+  const allCmac = rawParams.getAll('cmac');
 
-  // Return a debug page with all info
-  const debug = {
-    timestamp: new Date().toISOString(),
-    hasPiccData: !!picc_data,
-    piccDataLength: picc_data ? picc_data.length : 0,
-    hasCmac: !!cmac,
-    cmacLength: cmac ? cmac.length : 0,
-    keyLength: key ? key.length : 0,
-    keyFirstChars: key ? key.substring(0, 6) + '...' : 'undefined',
-    rawQuery: req.url,
-  };
+  const picc_data = allPiccData[allPiccData.length - 1];
+  const cmac = allCmac[allCmac.length - 1];
 
-  try {
-    const result = verifySDM(picc_data, cmac, key, { encoding: 'hex' });
-    debug.result = result;
-  } catch (e) {
-    debug.error = e.message;
-    debug.errorStack = e.stack;
+  if (!picc_data || !cmac) {
+    return res.redirect('/?valid=false');
   }
 
-  res.status(200).json(debug);
+  try {
+    // Call the library function (plain function, not a constructor)
+    const result = verifySDM(picc_data, cmac, key, { encoding: 'hex' });
+
+    if (result.valid) {
+      return res.redirect(`/?uid=${result.uid}&counter=${result.counter}&valid=true`);
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  return res.redirect('/?valid=false');
 }
