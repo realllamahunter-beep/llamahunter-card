@@ -1,4 +1,4 @@
-import { SDM } from 'node-sdm';
+import verifySDM from 'node-sdm';
 
 const key = process.env.NTAG_KEY;
 
@@ -10,14 +10,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const sdm = new SDM(key);
-    const result = sdm.verify(picc_data, cmac);
+    // The library expects (piccData, cmac, key, options)
+    const result = verifySDM(picc_data, cmac, key, { encoding: 'hex' });
 
     if (result.valid) {
       return res.redirect(`/?uid=${result.uid}&counter=${result.counter}&valid=true`);
     }
-  } catch (e) {
-    console.error(e);
+  } catch (err) {
+    console.error('Verification error:', err);
   }
 
   return res.redirect('/?valid=false');
