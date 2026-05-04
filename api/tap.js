@@ -1,12 +1,11 @@
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const { calculateCmacBuffer, decryptPicc } = require('node-sdm');
+const { calculateCmacData, decryptPicc } = require('node-sdm');
 
 const keyHex = (process.env.NTAG_KEY || '').trim();
 
 export default async function handler(req, res) {
-  // Because of the trial watermark, there may be duplicate parameters.
-  // We always take the last occurrence (the real dynamic data).
+  // Handle duplicate params from any trial watermark
   const rawParams = new URLSearchParams(req.url.split('?')[1] || '');
   const allPiccData = rawParams.getAll('picc_data');
   const allCmac = rawParams.getAll('cmac');
@@ -22,20 +21,18 @@ export default async function handler(req, res) {
     const cmacBuffer = Buffer.from(cmac, 'hex');
     const keyBuffer = Buffer.from(keyHex, 'hex');
 
-    // 1. Compute expected CMAC over PICC data
-    const expectedCmac = calculateCmacBuffer(piccBuffer, keyBuffer);
+    // ✅ Step 1: Decrypt the PICC data to get the real UID & counter
+    const decrypted = decryptPicc(piccBuffer, keyBuffer);
+    const uid = decrypted.uid;
+    const counter = decrypted.cntInt;
 
-    // 2. Compare CMACs
+    // ✅ Step 2: Re-compute the CMAC over the plain PICC data
+    const expectedCmac = calculateCmacData(uid, counter, keyBuffer);
+
+    // ✅ Step 3: Compare the expected CMAC with what the chip sent
     if (!expectedCmac.equals(cmacBuffer)) {
       return res.redirect('/?valid=false');
     }
-
-    // 3. Decrypt PICC data to extract UID and counter
-    const decrypted = decryptPicc(piccBuffer, keyBuffer);
-    const uidBytes = decrypted.slice(0, 7);
-    const counterBytes = decrypted.slice(7, 10);
-    const uid = uidBytes.toString('hex');
-    const counter = counterBytes.readUIntLE(0, 3);
 
     return res.redirect(`/?uid=${uid}&counter=${counter}&valid=true`);
   } catch (e) {
