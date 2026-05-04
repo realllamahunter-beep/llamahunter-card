@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/tap.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}
